@@ -63,7 +63,7 @@ export default function SignupPage() {
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
                   id="fullName"
@@ -71,7 +71,7 @@ export default function SignupPage() {
                   value={formData.fullName}
                   onChange={handleChange}
                   placeholder="John Doe"
-                  className="input-field pl-10"
+                 className="w-full rounded-xl border border-border bg-background dark:bg-background py-2.5 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted/60"
                   required
                 />
               </div>
@@ -83,7 +83,7 @@ export default function SignupPage() {
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="email"
                   id="email"
@@ -91,7 +91,7 @@ export default function SignupPage() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="you@example.com"
-                  className="input-field pl-10"
+                  className="w-full rounded-xl border border-border bg-background dark:bg-background py-2.5 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted/60"
                   required
                 />
               </div>
@@ -103,7 +103,7 @@ export default function SignupPage() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="password"
@@ -111,13 +111,13 @@ export default function SignupPage() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="••••••••"
-                  className="input-field pl-10 pr-10"
+                 className="w-full rounded-xl border border-border bg-background dark:bg-background py-2.5 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted/60"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -130,7 +130,7 @@ export default function SignupPage() {
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type={showConfirm ? 'text' : 'password'}
                   id="confirmPassword"
@@ -138,13 +138,13 @@ export default function SignupPage() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   placeholder="••••••••"
-                  className="input-field pl-10 pr-10"
+                  className="w-full rounded-xl border border-border bg-background dark:bg-background py-2.5 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted/60"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
