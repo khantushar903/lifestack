@@ -4,7 +4,7 @@ import { generateJwt } from "@/_lib/jwtManager";
 import { cookies } from "next/headers";
 
 export async function POST(request:Request){
-    const {email,password} = await request.json();
+    const {email,password,rememberMe} = await request.json();
     try{
         const result = await pool.query(`SELECT * FROM users WHERE email=$1;`,[email]);
         if(result.rowCount === 0) return Response.json({
@@ -17,6 +17,8 @@ export async function POST(request:Request){
               success:false,
               message:"Password is incorrect!"
         });
+
+    if(rememberMe){
        const token:string = await generateJwt({
             id:result.rows[0].id,
             name:result.rows[0].full_name,
@@ -30,7 +32,7 @@ export async function POST(request:Request){
          path: "/",
          maxAge: 60 * 60 * 24 * 7,
       });
-
+    }
       return Response.json({
         success:true,
         message:"Logged in successfully",

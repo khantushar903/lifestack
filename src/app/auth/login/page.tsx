@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Zap, TrendingUp, Dumbbell } from 'lucide-react';
+import { apiRequest } from '@/_lib/apiRequest';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -12,7 +14,7 @@ export default function LoginPage() {
     password: '',
     rememberMe: false,
   });
-
+  const router = useRouter();
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData({
@@ -21,13 +23,18 @@ export default function LoginPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      console.log('Login attempt:', formData);
-      window.location.href = '/dashboard';
-    }, 1000);
+    const result:Record<string,any> = await apiRequest({
+      link:"/api/usr/login",
+      method:"POST",
+      obj:formData,
+    });
+
+    if(result.success){
+      router.replace("/dashboard");
+    }
   };
 
   return (
