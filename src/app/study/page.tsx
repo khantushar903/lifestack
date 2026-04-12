@@ -6,8 +6,49 @@ import Navbar from '@/components/Navbar';
 import Card from '@/components/Card';
 import StatCard from '@/components/StatCard';
 import Modal from '@/components/Modal';
-import { BookOpen, Plus, Clock, CheckCircle, Circle, Trash2, Play, Pause } from 'lucide-react';
+import { BookOpen, Plus, Clock, CheckCircle, Circle, Trash2, Play, Pause, AlertTriangle } from 'lucide-react';
 import { apiRequest } from '@/_lib/apiRequest';
+
+function getDeadlineBadge(deadline: string | null, status: string) {
+  if (!deadline || status === 'completed') return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const deadlineDate = new Date(deadline);
+  deadlineDate.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { label: 'Overdue', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800', priority: 0 };
+  }
+  if (diffDays === 0) {
+    return { label: 'Due Today', className: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800', priority: 1 };
+  }
+  if (diffDays <= 3) {
+    return { label: 'Due Soon', className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800', priority: 2 };
+  }
+  return null;
+}
+
+function sortTasksByUrgency(tasks: any[]) {
+  return [...tasks].sort((a, b) => {
+    // Completed always go last
+    if (a.status === 'completed' && b.status !== 'completed') return 1;
+    if (a.status !== 'completed' && b.status === 'completed') return -1;
+
+    const badgeA = getDeadlineBadge(a.deadline, a.status);
+    const badgeB = getDeadlineBadge(b.deadline, b.status);
+    const priorityA = badgeA ? badgeA.priority : 99;
+    const priorityB = badgeB ? badgeB.priority : 99;
+
+    if (priorityA !== priorityB) return priorityA - priorityB;
+
+    // If same urgency, sort by deadline asc
+    if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    if (a.deadline) return -1;
+    if (b.deadline) return 1;
+    return 0;
+  });
+}
 
 export default function StudyPage() {
   const [showAddTask, setShowAddTask] = useState(false);
@@ -18,6 +59,7 @@ export default function StudyPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const router = useRouter();
@@ -58,10 +100,15 @@ export default function StudyPage() {
             setTimerActive(false);
             // Log the session when timer completes
             const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+            const selectedTask = tasks.find(t => t.id === selectedTaskId);
             apiRequest<any>({
               method: 'POST',
               link: '/api/study/sessions',
-              obj: { duration_seconds: duration, subject: 'Focus Session' },
+              obj: {
+                duration_seconds: duration,
+                taskId: selectedTaskId || null,
+                subject: selectedTask?.subject || 'Focus Session',
+              },
             }).then(() => fetchData());
             return 0;
           }
@@ -70,7 +117,7 @@ export default function StudyPage() {
       }, 1000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [timerActive, timeLeft, fetchData]);
+  }, [timerActive, timeLeft, fetchData, selectedTaskId, tasks]);
 
   const handleStartTimer = () => {
     if (!timerActive) {
@@ -84,16 +131,22 @@ export default function StudyPage() {
     if (startTimeRef.current > 0) {
       const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
       if (duration > 0) {
+        const selectedTask = tasks.find(t => t.id === selectedTaskId);
         await apiRequest<any>({
           method: 'POST',
           link: '/api/study/sessions',
-          obj: { duration_seconds: duration, subject: 'Focus Session' },
+          obj: {
+            duration_seconds: duration,
+            taskId: selectedTaskId || null,
+            subject: selectedTask?.subject || 'Focus Session',
+          },
         });
         fetchData();
       }
     }
     setShowTimer(false);
     setTimeLeft(25 * 60);
+    setSelectedTaskId('');
   };
 
   const handleTaskChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -151,6 +204,8 @@ export default function StudyPage() {
   }
 
   const weeklyStudyHours = stats ? (stats.weekly_study_seconds / 3600).toFixed(1) : '0';
+  const sortedTasks = sortTasksByUrgency(tasks);
+  const pendingTasks = tasks.filter(t => t.status === 'pending');
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
@@ -205,7 +260,7 @@ export default function StudyPage() {
             <StatCard
               title="Due This Week"
               value={`${stats?.due_this_week || 0}`}
-              icon={<Circle className="w-6 h-6" />}
+              icon={<AlertTriangle className="w-6 h-6" />}
               color="error"
             />
           </div>
@@ -215,61 +270,76 @@ export default function StudyPage() {
             {/* Active Tasks */}
             <Card title="Tasks" className="lg:col-span-2">
               <div className="space-y-3">
-                {tasks.length === 0 ? (
+                {sortedTasks.length === 0 ? (
                   <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">No tasks yet. Click &quot;New Task&quot; to get started!</p>
                 ) : (
-                  tasks.map((task: any) => (
-                    <div
-                      key={task.id}
-                      className={`p-4 rounded-lg border transition-all ${
-                        task.status === 'completed'
-                          ? 'bg-slate-50/50 dark:bg-slate-700/30 border-slate-200 dark:border-slate-600 opacity-60'
-                          : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-indigo-600'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <button className="mt-1 flex-shrink-0" onClick={() => handleToggleTask(task.id, task.status)}>
-                          {task.status === 'completed' ? (
-                            <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-                          ) : (
-                            <Circle className="w-6 h-6 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" />
-                          )}
-                        </button>
-
-                        <div className="flex-1">
-                          <p className={`font-semibold ${task.status === 'completed' ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>
-                            {task.title || task.task_description}
-                          </p>
-                          <p className="text-xs text-slate-600 dark:text-slate-400">{task.subject}</p>
-                        </div>
-
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span
-                            className={`badge text-xs ${
-                              task.priority === 'high'
-                                ? 'badge-error'
-                                : task.priority === 'medium'
-                                ? 'badge-warning'
-                                : 'badge-primary'
-                            }`}
-                          >
-                            {task.priority}
-                          </span>
-                          {task.deadline && (
-                            <span className="text-xs text-slate-600 dark:text-slate-400 min-w-fit">
-                              {new Date(task.deadline).toLocaleDateString()}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-600" />
+                  sortedTasks.map((task: any) => {
+                    const urgencyBadge = getDeadlineBadge(task.deadline, task.status);
+                    return (
+                      <div
+                        key={task.id}
+                        className={`p-4 rounded-lg border transition-all ${
+                          task.status === 'completed'
+                            ? 'bg-slate-50/50 dark:bg-slate-700/30 border-slate-200 dark:border-slate-600 opacity-60'
+                            : urgencyBadge?.priority === 0
+                            ? 'bg-red-50/50 dark:bg-red-900/10 border-red-200 dark:border-red-800 hover:border-red-300 dark:hover:border-red-700'
+                            : urgencyBadge?.priority === 1
+                            ? 'bg-orange-50/50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800 hover:border-orange-300 dark:hover:border-orange-700'
+                            : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-indigo-600'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <button className="mt-1 flex-shrink-0" onClick={() => handleToggleTask(task.id, task.status)}>
+                            {task.status === 'completed' ? (
+                              <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                            ) : (
+                              <Circle className="w-6 h-6 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" />
+                            )}
                           </button>
+
+                          <div className="flex-1">
+                            <p className={`font-semibold ${task.status === 'completed' ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>
+                              {task.title || task.task_description}
+                            </p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400">{task.subject}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                            {/* Urgency badge */}
+                            {urgencyBadge && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${urgencyBadge.className}`}>
+                                {urgencyBadge.priority === 0 && <AlertTriangle className="w-3 h-3 mr-1" />}
+                                {urgencyBadge.label}
+                              </span>
+                            )}
+                            {/* Priority badge */}
+                            <span
+                              className={`badge text-xs ${
+                                task.priority === 'high'
+                                  ? 'badge-error'
+                                  : task.priority === 'medium'
+                                  ? 'badge-warning'
+                                  : 'badge-primary'
+                              }`}
+                            >
+                              {task.priority}
+                            </span>
+                            {task.deadline && (
+                              <span className="text-xs text-slate-600 dark:text-slate-400 min-w-fit">
+                                {new Date(task.deadline).toLocaleDateString()}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-600" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>
@@ -323,8 +393,13 @@ export default function StudyPage() {
                     className="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600"
                   >
                     <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">{session.subject || session.task_title || 'Study Session'}</p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">{new Date(session.started_at).toLocaleDateString()}</p>
+                      <p className="font-semibold text-slate-900 dark:text-white">{session.task_title || session.subject || 'Study Session'}</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {new Date(session.started_at).toLocaleDateString()}
+                        {session.task_title && session.subject && (
+                          <span className="ml-2 text-indigo-600 dark:text-indigo-400">• {session.subject}</span>
+                        )}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-slate-900 dark:text-white">
@@ -342,6 +417,29 @@ export default function StudyPage() {
       {/* Timer Modal */}
       <Modal isOpen={showTimer} title="Focus Timer (Pomodoro)" onClose={() => { setTimerActive(false); setShowTimer(false); }} size="sm">
         <div className="flex flex-col items-center justify-center space-y-6 py-4">
+          {/* Task Selector */}
+          <div className="w-full">
+            <label className="label-form">Link to Task (optional)</label>
+            <select
+              value={selectedTaskId}
+              onChange={(e) => setSelectedTaskId(e.target.value)}
+              className="input-field"
+              disabled={timerActive}
+            >
+              <option value="">General Focus Session</option>
+              {pendingTasks.map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title || task.task_description} — {task.subject}
+                </option>
+              ))}
+            </select>
+            {selectedTaskId && (
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
+                ✓ Session will be linked to this task
+              </p>
+            )}
+          </div>
+
           {/* Timer Display */}
           <div className="text-6xl font-bold text-indigo-600 dark:text-indigo-400 font-mono">
             {formatTime(timeLeft)}

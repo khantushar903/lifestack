@@ -7,14 +7,27 @@ import Navbar from '@/components/Navbar';
 import StatCard from '@/components/StatCard';
 import Card from '@/components/Card';
 import ProgressBar from '@/components/ProgressBar';
-import { Activity, TrendingUp, BookOpen, Zap, ArrowRight, Calendar, Flame, DollarSign } from 'lucide-react';
+import { Activity, TrendingUp, BookOpen, Zap, ArrowRight, Calendar, Flame, DollarSign, AlertTriangle, CheckCircle, Circle, Clock } from 'lucide-react';
 import { apiRequest } from '@/_lib/apiRequest';
 
 interface DashboardData {
   user: { name: string; height_cm: number; weight_kg: number; bmi: string };
   fitness: { today_calories: number; today_duration: number; recent_workouts: any[] };
-  finance: { balance: number; monthly_spending: number; recent_transactions: any[] };
-  study: { today_hours: string };
+  finance: { balance: number; monthly_spending: number; recent_transactions: any[]; top_categories: any[] };
+  study: { today_hours: string; today_tasks: any[] };
+}
+
+function getTaskUrgency(deadline: string) {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const deadlineDate = new Date(deadline);
+  deadlineDate.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return { label: 'Overdue', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' };
+  if (diffDays === 0) return { label: 'Today', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' };
+  if (diffDays <= 3) return { label: `${diffDays}d left`, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
+  return { label: `${diffDays}d left`, color: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-700' };
 }
 
 export default function Dashboard() {
@@ -55,6 +68,8 @@ export default function Dashboard() {
   const weightKg = data?.user?.weight_kg || 0;
   const heightFt = heightCm > 0 ? `${Math.floor(heightCm / 30.48)}'${Math.round((heightCm % 30.48) / 2.54)}"` : 'N/A';
   const weightLbs = weightKg > 0 ? Math.round(weightKg * 2.205) : 0;
+  const todayTasks = data?.study?.today_tasks || [];
+  const topCategories = data?.finance?.top_categories || [];
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
@@ -142,6 +157,61 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Today's Study Tasks */}
+          <div className="mb-12">
+            <Card title="📚 Today's Study Tasks">
+              <div className="space-y-3">
+                {todayTasks.length === 0 ? (
+                  <div className="text-center py-6">
+                    <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm text-slate-500 dark:text-slate-400">You&apos;re all caught up! No urgent tasks.</p>
+                    <Link href="/study" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mt-2 inline-block">
+                      View all tasks →
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    {todayTasks.map((task: any) => {
+                      const urgency = task.deadline ? getTaskUrgency(task.deadline) : null;
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        >
+                          <Circle className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 dark:text-white truncate">{task.title}</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 capitalize">{task.subject}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`badge text-xs ${
+                              task.priority === 'high' ? 'badge-error' : task.priority === 'medium' ? 'badge-warning' : 'badge-primary'
+                            }`}>
+                              {task.priority}
+                            </span>
+                            {urgency && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${urgency.bg} ${urgency.color}`}>
+                                {urgency.label === 'Overdue' && <AlertTriangle className="w-3 h-3 mr-1" />}
+                                {urgency.label === 'Today' && <Clock className="w-3 h-3 mr-1" />}
+                                {urgency.label}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <Link
+                      href="/study"
+                      className="flex items-center justify-center gap-2 p-3 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 hover:shadow-md transition-shadow text-purple-700 dark:text-purple-300 font-semibold text-sm"
+                    >
+                      View All Tasks <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </>
                 )}
               </div>
             </Card>
@@ -259,6 +329,27 @@ export default function Dashboard() {
                   </div>
                   <ProgressBar percentage={Math.min((data?.finance?.monthly_spending || 0) / 2000 * 100, 100)} color="warning" showPercentage={false} />
                 </div>
+
+                {/* Top Spending Categories */}
+                {topCategories.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Top Categories</p>
+                    <div className="space-y-2">
+                      {topCategories.map((cat: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2.5 h-2.5 rounded-full ${
+                              idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`} />
+                            <span className="text-slate-600 dark:text-slate-400">{cat.category}</span>
+                          </div>
+                          <span className="font-semibold text-slate-900 dark:text-white">${cat.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <p className="text-sm text-green-700 dark:text-green-300">
                     💡 Balance: ${(data?.finance?.balance || 0).toLocaleString()}

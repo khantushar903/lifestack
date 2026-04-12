@@ -63,6 +63,33 @@ export async function GET() {
       [user.id]
     );
 
+    // Today's top study tasks — pending tasks due today or overdue, sorted by urgency
+    const todayTasks = await pool.query(
+      `SELECT id, title, subject, priority, deadline, status
+       FROM study_tasks
+       WHERE userId = $1
+         AND status = 'pending'
+         AND (deadline IS NOT NULL AND deadline::date <= CURRENT_DATE + INTERVAL '3 days')
+       ORDER BY deadline ASC NULLS LAST
+       LIMIT 5`,
+      [user.id]
+    );
+
+    // Top spending categories this month
+    const topCategories = await pool.query(
+      `SELECT
+         COALESCE(fc.name, 'General') as category_name,
+         SUM(t.amount) as total_amount
+       FROM transactions t
+       LEFT JOIN finance_categories fc ON t.categoryId = fc.id
+       WHERE t.userId = $1 AND t.type = 'expense'
+       AND t.transaction_date >= date_trunc('month', CURRENT_DATE)
+       GROUP BY fc.name
+       ORDER BY total_amount DESC
+       LIMIT 3`,
+      [user.id]
+    );
+
     // BMI calculation
     const height_cm = profile.rows[0]?.height_cm || 0;
     const weight_kg = profile.rows[0]?.current_weight || 0;
@@ -86,9 +113,14 @@ export async function GET() {
           balance: parseFloat(balance.rows[0].balance),
           monthly_spending: parseFloat(monthlySpending.rows[0].total),
           recent_transactions: recentTransactions.rows,
+          top_categories: topCategories.rows.map((row) => ({
+            category: row.category_name,
+            amount: parseFloat(row.total_amount),
+          })),
         },
         study: {
           today_hours: (parseInt(todayStudy.rows[0].total_seconds) / 3600).toFixed(1),
+          today_tasks: todayTasks.rows,
         },
       },
     });

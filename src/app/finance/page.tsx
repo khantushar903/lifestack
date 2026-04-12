@@ -7,11 +7,18 @@ import Card from '@/components/Card';
 import StatCard from '@/components/StatCard';
 import ProgressBar from '@/components/ProgressBar';
 import Modal from '@/components/Modal';
-import { TrendingUp, TrendingDown, Plus, DollarSign, Wallet, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, DollarSign, Wallet, Trash2, Tag, PieChart } from 'lucide-react';
 import { apiRequest } from '@/_lib/apiRequest';
+
+const CATEGORY_COLORS = [
+  'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500',
+  'bg-cyan-500', 'bg-purple-500', 'bg-orange-500', 'bg-teal-500',
+  'bg-pink-500', 'bg-sky-500',
+];
 
 export default function FinancePage() {
   const [showAddTransaction, setShowAddTransaction] = useState(false);
+  const [showManageCategories, setShowManageCategories] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
@@ -25,6 +32,9 @@ export default function FinancePage() {
     description: '',
     date: new Date().toISOString().split('T')[0],
   });
+
+  const [newCategory, setNewCategory] = useState({ name: '', type: 'expense' });
+  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -75,6 +85,30 @@ export default function FinancePage() {
     if (result.success) fetchData();
   };
 
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCategoryMessage(null);
+    if (!newCategory.name.trim()) {
+      setCategoryMessage('Category name is required');
+      return;
+    }
+    try {
+      const result = await apiRequest<any>({
+        method: 'POST',
+        link: '/api/finance/categories',
+        obj: { name: newCategory.name.trim(), type: newCategory.type },
+      });
+      if (result.success) {
+        setNewCategory({ name: '', type: 'expense' });
+        setCategoryMessage('✓ Category created!');
+        fetchData();
+        setTimeout(() => setCategoryMessage(null), 2000);
+      }
+    } catch {
+      setCategoryMessage('Failed to create category');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
@@ -82,6 +116,9 @@ export default function FinancePage() {
       </div>
     );
   }
+
+  const categoryBreakdown = stats?.category_breakdown || [];
+  const totalExpense = stats?.monthly_expense || 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
@@ -95,13 +132,22 @@ export default function FinancePage() {
               <h1 className="text-3xl md:text-4xl font-bold mb-2">Finance Hub</h1>
               <p className="text-slate-600 dark:text-slate-400">Manage your income and expenses</p>
             </div>
-            <button
-              onClick={() => setShowAddTransaction(true)}
-              className="btn-primary flex items-center gap-2 whitespace-nowrap"
-            >
-              <Plus className="w-5 h-5" />
-              Add Transaction
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => { setShowManageCategories(true); setCategoryMessage(null); }}
+                className="btn-secondary flex items-center gap-2 whitespace-nowrap"
+              >
+                <Tag className="w-5 h-5" />
+                Categories
+              </button>
+              <button
+                onClick={() => setShowAddTransaction(true)}
+                className="btn-primary flex items-center gap-2 whitespace-nowrap"
+              >
+                <Plus className="w-5 h-5" />
+                Add Transaction
+              </button>
+            </div>
           </div>
 
           {/* Stats */}
@@ -211,6 +257,47 @@ export default function FinancePage() {
               </div>
             </Card>
           </div>
+
+          {/* Spending by Category */}
+          <Card title="Spending by Category">
+            {categoryBreakdown.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">No expense data this month. Add transactions to see your breakdown.</p>
+            ) : (
+              <div className="space-y-4">
+                {/* Category Bars */}
+                {categoryBreakdown.map((item: any, idx: number) => {
+                  const percentage = totalExpense > 0 ? (item.amount / totalExpense) * 100 : 0;
+                  return (
+                    <div key={idx}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${CATEGORY_COLORS[idx % CATEGORY_COLORS.length]}`} />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{item.category}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">{item.count} transactions</span>
+                          <span className="text-sm font-bold text-slate-900 dark:text-white">${item.amount.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div
+                          className={`h-full ${CATEGORY_COLORS[idx % CATEGORY_COLORS.length]} rounded-full transition-all duration-500`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 text-right">{percentage.toFixed(1)}%</p>
+                    </div>
+                  );
+                })}
+
+                {/* Total Footer */}
+                <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Spending</span>
+                  <span className="text-lg font-bold text-slate-900 dark:text-white">${totalExpense.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
       </main>
 
@@ -302,6 +389,75 @@ export default function FinancePage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Manage Categories Modal */}
+      <Modal isOpen={showManageCategories} title="Manage Categories" onClose={() => setShowManageCategories(false)}>
+        <div className="space-y-6">
+          {/* Add New Category Form */}
+          <form onSubmit={handleAddCategory} className="space-y-3">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Create New Category</p>
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={newCategory.name}
+                onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                placeholder="Category name"
+                className="input-field col-span-2"
+              />
+              <select
+                value={newCategory.type}
+                onChange={(e) => setNewCategory({ ...newCategory, type: e.target.value })}
+                className="input-field"
+              >
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <button type="submit" className="btn-primary w-full flex items-center justify-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add Category
+            </button>
+            {categoryMessage && (
+              <p className={`text-sm text-center ${categoryMessage.startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {categoryMessage}
+              </p>
+            )}
+          </form>
+
+          {/* Existing Categories */}
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Existing Categories</p>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {categories.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-3">No categories yet. Create your first one above!</p>
+              ) : (
+                categories.map((cat: any) => (
+                  <div
+                    key={cat.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-slate-500" />
+                      <span className="font-medium text-slate-900 dark:text-white">{cat.name}</span>
+                    </div>
+                    <span className={`badge text-xs ${cat.type === 'income' ? 'badge-success' : 'badge-warning'}`}>
+                      {cat.type}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowManageCategories(false)}
+            className="btn-secondary w-full"
+          >
+            Done
+          </button>
+        </div>
       </Modal>
     </div>
   );

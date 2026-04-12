@@ -35,6 +35,22 @@ export async function GET() {
       [user.id]
     );
 
+    // Per-category spending breakdown for current month
+    const categoryBreakdown = await pool.query(
+      `SELECT
+         COALESCE(fc.name, 'General') as category_name,
+         SUM(t.amount) as total_amount,
+         COUNT(*) as transaction_count
+       FROM transactions t
+       LEFT JOIN finance_categories fc ON t.categoryId = fc.id
+       WHERE t.userId = $1 AND t.type = 'expense'
+       AND t.transaction_date >= date_trunc('month', CURRENT_DATE)
+       GROUP BY fc.name
+       ORDER BY total_amount DESC
+       LIMIT 10`,
+      [user.id]
+    );
+
     const income = parseFloat(incomeResult.rows[0].total);
     const expense = parseFloat(expenseResult.rows[0].total);
     const balance = parseFloat(balanceResult.rows[0].balance);
@@ -47,6 +63,11 @@ export async function GET() {
         monthly_expense: expense,
         total_balance: balance,
         savings_rate: savingsRate,
+        category_breakdown: categoryBreakdown.rows.map((row) => ({
+          category: row.category_name,
+          amount: parseFloat(row.total_amount),
+          count: parseInt(row.transaction_count),
+        })),
       },
     });
   } catch (err) {
